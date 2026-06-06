@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度地图左侧地址本地修改
 // @namespace    local.bdmap.address.override
-// @version      26.66.2209
+// @version      26.66.2210
 // @author       chengguanghua
 // @description  本地覆盖百度地图搜索结果左侧地址，刷新后继续按 POI uid 生效。
 // @match        https://map.baidu.com/*
@@ -930,7 +930,7 @@
         隐藏
       </button>
     </div>
-    <div class="tm-address-override-status__version">v26.66.2209</div>
+    <div class="tm-address-override-status__version">v26.66.2210</div>
   `;
 		widget.querySelector(".tm-address-override-status__button--edit")?.addEventListener("click", (event) => {
 			event.preventDefault();
