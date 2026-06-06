@@ -4,7 +4,7 @@ import type { AddressOverrideRecord, AddressOverrideStore } from "./types";
 
 export function loadOverrideStore(): AddressOverrideStore {
   try {
-    const value = GM_getValue<AddressOverrideStore>(STORE_KEY, {});
+    const value = getStorageValue();
     if (!value || typeof value !== "object" || Array.isArray(value)) {
       return {};
     }
@@ -17,7 +17,11 @@ export function loadOverrideStore(): AddressOverrideStore {
 }
 
 function saveOverrideStore(store: AddressOverrideStore): void {
-  GM_setValue(STORE_KEY, store);
+  try {
+    setStorageValue(store);
+  } catch (error) {
+    console.warn("[BDMap Address Override] save error:", error);
+  }
 }
 
 export function saveAddressOverride(
@@ -33,4 +37,30 @@ export function removeAddressOverride(key: string): void {
   const store = loadOverrideStore();
   delete store[key];
   saveOverrideStore(store);
+}
+
+export function clearAddressOverrides(): void {
+  saveOverrideStore({});
+}
+
+function getStorageValue(): AddressOverrideStore {
+  if (typeof GM_getValue === "function") {
+    return GM_getValue<AddressOverrideStore>(STORE_KEY, {});
+  }
+
+  const rawValue = window.localStorage.getItem(STORE_KEY);
+  if (!rawValue) {
+    return {};
+  }
+
+  return JSON.parse(rawValue) as AddressOverrideStore;
+}
+
+function setStorageValue(store: AddressOverrideStore): void {
+  if (typeof GM_setValue === "function") {
+    GM_setValue(STORE_KEY, store);
+    return;
+  }
+
+  window.localStorage.setItem(STORE_KEY, JSON.stringify(store));
 }

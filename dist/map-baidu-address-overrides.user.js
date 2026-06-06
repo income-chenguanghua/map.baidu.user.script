@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         百度地图左侧地址本地修改
 // @namespace    local.bdmap.address.override
-// @version      26.65.2346
+// @version      26.66.2209
 // @author       chengguanghua
 // @description  本地覆盖百度地图搜索结果左侧地址，刷新后继续按 POI uid 生效。
 // @match        https://map.baidu.com/*
@@ -57,7 +57,6 @@
 		editButton: "tm-edit-addr-btn",
 		overriddenAddress: "tm-addr-overridden",
 		overriddenTitle: "tm-title-overridden",
-		editableItem: "tm-poi-editable",
 		overrideTag: "tm-addr-tag",
 		statusWidget: "tm-address-override-status",
 		dialogButton: "tm-address-dialog__button",
@@ -100,16 +99,14 @@
 		return titleEl.getAttribute("title")?.trim() || titleEl.textContent.trim();
 	}
 	function rememberOriginalAddress(addressEl) {
-		const existing = addressEl.dataset[ORIGINAL_ADDRESS_DATA_KEY];
-		if (existing) return existing;
+		if ("tmOriginalAddress" in addressEl.dataset) return addressEl.dataset["tmOriginalAddress"] ?? "";
 		const originalAddress = readAddressText(addressEl);
 		addressEl.dataset[ORIGINAL_ADDRESS_DATA_KEY] = originalAddress;
 		return originalAddress;
 	}
 	function rememberOriginalTitle(titleEl) {
 		if (!titleEl) return "";
-		const existing = titleEl.dataset[ORIGINAL_TITLE_DATA_KEY];
-		if (existing) return existing;
+		if ("tmOriginalTitle" in titleEl.dataset) return titleEl.dataset["tmOriginalTitle"] ?? "";
 		const originalTitle = readTitleText(titleEl);
 		titleEl.dataset[ORIGINAL_TITLE_DATA_KEY] = originalTitle;
 		return originalTitle;
@@ -123,9 +120,9 @@
 	function getPoiContext(item) {
 		const titleEl = getTitleElement(item);
 		const addressEl = getAddressElement(item);
-		if (!addressEl) return null;
+		if (!titleEl && !addressEl) return null;
 		const originalTitle = rememberOriginalTitle(titleEl);
-		const originalAddress = rememberOriginalAddress(addressEl);
+		const originalAddress = addressEl ? rememberOriginalAddress(addressEl) : "";
 		const key = buildStableKey(item, originalTitle, originalAddress);
 		if (!key) return null;
 		return {
@@ -143,13 +140,13 @@
 		return titleEl ? readTitleText(titleEl) : "";
 	}
 	function getCurrentAddress(addressEl) {
-		return addressEl.textContent.trim();
+		return addressEl ? readAddressText(addressEl) : "";
 	}
 	function renderOverriddenTitle(titleEl, title) {
 		if (!titleEl) return;
 		titleEl.textContent = title;
 		titleEl.setAttribute("title", title);
-		titleEl.classList.add(CLASS_NAMES.overriddenTitle);
+		titleEl.classList.remove(CLASS_NAMES.overriddenTitle);
 	}
 	function renderOriginalTitle(titleEl, originalTitle) {
 		if (!titleEl) return;
@@ -157,26 +154,30 @@
 		titleEl.setAttribute("title", originalTitle);
 		titleEl.classList.remove(CLASS_NAMES.overriddenTitle);
 	}
-	function renderOverriddenAddress(addressEl, address) {
-		addressEl.textContent = address;
-		addressEl.setAttribute("title", address);
-		addressEl.classList.add(CLASS_NAMES.overriddenAddress);
-		ensureOverrideTag(addressEl);
+	function renderOverriddenAddress(item, addressEl, address) {
+		const nextAddressEl = ensureAddressElement(item, addressEl);
+		if (!nextAddressEl) return;
+		nextAddressEl.textContent = address;
+		nextAddressEl.setAttribute("title", address);
+		nextAddressEl.classList.remove(CLASS_NAMES.overriddenAddress);
+		removeOverrideTag(nextAddressEl);
 	}
 	function renderOriginalAddress(addressEl, originalAddress) {
+		if (!addressEl) return;
+		if (!originalAddress && isScriptCreatedAddressRow(addressEl)) {
+			addressEl.closest(".row.addr")?.remove();
+			return;
+		}
 		addressEl.textContent = originalAddress;
 		addressEl.setAttribute("title", originalAddress);
 		addressEl.classList.remove(CLASS_NAMES.overriddenAddress);
 		removeOverrideTag(addressEl);
 	}
-	function setPoiItemEditMode(item, enabled) {
-		item.classList.toggle(CLASS_NAMES.editableItem, enabled);
-	}
 	function hasEditButton(item) {
 		return Boolean(item.querySelector(`.${CLASS_NAMES.editButton}`));
 	}
-	function appendEditButton(addressEl, onClick) {
-		const parent = addressEl.parentElement;
+	function appendEditButton(item, addressEl, titleEl, onClick) {
+		const parent = addressEl?.parentElement || titleEl?.parentElement || item;
 		if (!parent) return;
 		const button = document.createElement("button");
 		button.type = "button";
@@ -193,16 +194,27 @@
 	function removeEditButton(item) {
 		item.querySelector(`.${CLASS_NAMES.editButton}`)?.remove();
 	}
-	function ensureOverrideTag(addressEl) {
-		const parent = addressEl.parentElement;
-		if (!parent || parent.querySelector(`.${CLASS_NAMES.overrideTag}`)) return;
-		const tag = document.createElement("span");
-		tag.className = CLASS_NAMES.overrideTag;
-		tag.textContent = "已本地修改";
-		parent.appendChild(tag);
-	}
 	function removeOverrideTag(addressEl) {
 		addressEl.parentElement?.querySelector(`.${CLASS_NAMES.overrideTag}`)?.remove();
+	}
+	function ensureAddressElement(item, addressEl) {
+		if (addressEl) return addressEl;
+		const titleRow = getTitleElement(item)?.closest(".row");
+		const container = titleRow?.parentElement || item.querySelector(".ml_30") || item.querySelector(".mr_90");
+		if (!container) return null;
+		const row = document.createElement("div");
+		row.className = "row addr";
+		row.dataset.tmCreatedAddressRow = "true";
+		const span = document.createElement("span");
+		span.className = "n-grey";
+		span.dataset[ORIGINAL_ADDRESS_DATA_KEY] = "";
+		row.appendChild(span);
+		if (titleRow?.parentElement === container) titleRow.insertAdjacentElement("afterend", row);
+		else container.appendChild(row);
+		return span;
+	}
+	function isScriptCreatedAddressRow(addressEl) {
+		return addressEl.closest(".row.addr")?.dataset.tmCreatedAddressRow === "true";
 	}
 	function queryFirst(root, selectors) {
 		for (const selector of selectors) {
@@ -212,7 +224,7 @@
 		return null;
 	}
 	function looksLikePoiItem(item) {
-		return Boolean(getUidFromItem(item) || getAddressElement(item));
+		return Boolean(getUidFromItem(item) || getTitleElement(item) || getAddressElement(item));
 	}
 	function findPoiContainerFromUidLink(link) {
 		let current = link.parentElement;
@@ -353,7 +365,7 @@
 	var installed = false;
 	function installAddressOverrideStyles() {
 		if (installed) return;
-		_GM_addStyle(`
+		injectStyle(`
     .tm-edit-addr-btn {
       position: relative;
       z-index: 1;
@@ -390,41 +402,6 @@
       outline-offset: 2px;
     }
 
-    .tm-addr-overridden,
-    .tm-title-overridden {
-      color: #cf222e !important;
-      font-weight: 500;
-    }
-
-    .tm-poi-editable {
-      cursor: pointer !important;
-      outline: 1px solid transparent;
-      outline-offset: -1px;
-      transition:
-        background 120ms ease,
-        outline-color 120ms ease;
-    }
-
-    .tm-poi-editable:hover {
-      background: #f6f8fa !important;
-      outline-color: #0969da;
-    }
-
-    .tm-addr-tag {
-      display: inline-flex;
-      align-items: center;
-      height: 20px;
-      margin-left: 6px;
-      padding: 0 7px;
-      border: 1px solid #d0d7de;
-      border-radius: 999px;
-      background: #f6f8fa;
-      color: #57606a;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 12px;
-      line-height: 18px;
-    }
-
     .tm-address-override-status {
       position: fixed;
       right: 16px;
@@ -432,7 +409,7 @@
       z-index: 2147483646;
       display: inline-flex;
       flex-direction: column;
-      align-items: center;
+      align-items: flex-end;
       gap: 3px;
       min-width: 64px;
       padding: 7px 10px;
@@ -446,21 +423,48 @@
       font-size: 12px;
       font-weight: 500;
       line-height: 1.1;
+      text-align: right;
     }
 
-    .tm-address-override-status__action {
-      display: block;
+    .tm-address-override-status__actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .tm-address-override-status__button {
+      height: 28px;
+      padding: 0 10px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #f6f8fa;
+      color: #24292f;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 12px;
       font-weight: 600;
-      line-height: 14px;
+      line-height: 20px;
+    }
+
+    .tm-address-override-status__button:hover {
+      background: #f3f4f6;
+      border-color: #afb8c1;
+    }
+
+    .tm-address-override-status__button--reset {
+      color: #cf222e;
     }
 
     .tm-address-override-status__version {
       display: block;
+      width: 100%;
       color: #57606a;
+      opacity: 0.66;
       font-size: 10px;
       font-weight: 500;
       line-height: 12px;
+      text-align: right;
     }
 
     .tm-address-override-status:hover {
@@ -473,16 +477,23 @@
     }
 
     .tm-address-override-status.is-editing {
+      border-color: #d0d7de;
+      background: #f6f8fa;
+      color: #24292f;
+    }
+
+    .tm-address-override-status.is-editing .tm-address-override-status__button--edit {
       border-color: rgba(27, 31, 36, 0.15);
       background: #2da44e;
       color: #ffffff;
     }
 
     .tm-address-override-status.is-editing .tm-address-override-status__version {
-      color: rgba(255, 255, 255, 0.82);
+      color: #57606a;
+      opacity: 0.66;
     }
 
-    .tm-address-override-status.is-editing:hover {
+    .tm-address-override-status.is-editing .tm-address-override-status__button--edit:hover {
       background: #2c974b;
       border-color: rgba(27, 31, 36, 0.15);
     }
@@ -664,12 +675,139 @@
       border-color: rgba(207, 34, 46, 0.4);
       background: #ffebe9;
     }
+
+    .tm-address-confirm-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(31, 35, 40, 0.35);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .tm-address-confirm {
+      width: min(360px, 100%);
+      padding: 16px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #ffffff;
+      box-shadow: 0 16px 32px rgba(31, 35, 40, 0.16);
+      color: #24292f;
+    }
+
+    .tm-address-confirm__title {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 20px;
+    }
+
+    .tm-address-confirm__message {
+      margin: 0;
+      color: #57606a;
+      font-size: 13px;
+      line-height: 20px;
+    }
+
+    .tm-address-confirm__footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .tm-address-confirm__button {
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #f6f8fa;
+      color: #24292f;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 20px;
+    }
+
+    .tm-address-confirm__button:hover {
+      background: #f3f4f6;
+      border-color: #afb8c1;
+    }
+
+    .tm-address-confirm__button--primary {
+      border-color: rgba(27, 31, 36, 0.15);
+      background: #2da44e;
+      color: #ffffff;
+    }
+
+    .tm-address-confirm__button--primary:hover {
+      background: #2c974b;
+      border-color: rgba(27, 31, 36, 0.15);
+    }
+
+    .tm-address-confirm__button--danger {
+      border-color: rgba(27, 31, 36, 0.15);
+      background: #cf222e;
+      color: #ffffff;
+    }
+
+    .tm-address-confirm__button--danger:hover {
+      background: #a40e26;
+      border-color: rgba(27, 31, 36, 0.15);
+    }
+
+    .tm-address-toast-root {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 2147483647;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .tm-address-toast {
+      max-width: 320px;
+      padding: 10px 12px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #24292f;
+      box-shadow: 0 8px 24px rgba(140, 149, 159, 0.24);
+      color: #ffffff;
+      font-size: 13px;
+      line-height: 18px;
+      opacity: 1;
+      transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+    }
+
+    .tm-address-toast.is-leaving {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
   `);
 		installed = true;
 	}
+	function injectStyle(css) {
+		if (typeof _GM_addStyle === "function") {
+			_GM_addStyle(css);
+			return;
+		}
+		const style = document.createElement("style");
+		style.textContent = css;
+		document.head.appendChild(style);
+	}
 	function loadOverrideStore() {
 		try {
-			const value = _GM_getValue(STORE_KEY, {});
+			const value = getStorageValue();
 			if (!value || typeof value !== "object" || Array.isArray(value)) return {};
 			return value;
 		} catch (error) {
@@ -678,7 +816,11 @@
 		}
 	}
 	function saveOverrideStore(store) {
-		_GM_setValue(STORE_KEY, store);
+		try {
+			setStorageValue(store);
+		} catch (error) {
+			console.warn("[BDMap Address Override] save error:", error);
+		}
 	}
 	function saveAddressOverride(key, record) {
 		const store = loadOverrideStore();
@@ -690,36 +832,188 @@
 		delete store[key];
 		saveOverrideStore(store);
 	}
+	function clearAddressOverrides() {
+		saveOverrideStore({});
+	}
+	function getStorageValue() {
+		if (typeof _GM_getValue === "function") return _GM_getValue(STORE_KEY, {});
+		const rawValue = window.localStorage.getItem(STORE_KEY);
+		if (!rawValue) return {};
+		return JSON.parse(rawValue);
+	}
+	function setStorageValue(store) {
+		if (typeof _GM_setValue === "function") {
+			_GM_setValue(STORE_KEY, store);
+			return;
+		}
+		window.localStorage.setItem(STORE_KEY, JSON.stringify(store));
+	}
+	var CONFIRM_ID = "tm-address-confirm-dialog";
+	var TOAST_ROOT_ID = "tm-address-toast-root";
+	function openConfirmDialog(options) {
+		closeConfirmDialog();
+		const backdrop = document.createElement("div");
+		backdrop.id = CONFIRM_ID;
+		backdrop.className = "tm-address-confirm-backdrop";
+		const dialog = document.createElement("section");
+		dialog.className = "tm-address-confirm";
+		dialog.setAttribute("role", "dialog");
+		dialog.setAttribute("aria-modal", "true");
+		const title = document.createElement("h2");
+		title.className = "tm-address-confirm__title";
+		title.textContent = options.title;
+		const message = document.createElement("p");
+		message.className = "tm-address-confirm__message";
+		message.textContent = options.message;
+		const footer = document.createElement("div");
+		footer.className = "tm-address-confirm__footer";
+		const cancelButton = document.createElement("button");
+		cancelButton.type = "button";
+		cancelButton.className = "tm-address-confirm__button";
+		cancelButton.textContent = options.cancelText || "取消";
+		cancelButton.addEventListener("click", closeConfirmDialog);
+		const confirmButton = document.createElement("button");
+		confirmButton.type = "button";
+		confirmButton.className = options.danger ? "tm-address-confirm__button tm-address-confirm__button--danger" : "tm-address-confirm__button tm-address-confirm__button--primary";
+		confirmButton.textContent = options.confirmText;
+		confirmButton.addEventListener("click", () => {
+			closeConfirmDialog();
+			options.onConfirm();
+		});
+		footer.append(cancelButton, confirmButton);
+		dialog.append(title, message, footer);
+		backdrop.appendChild(dialog);
+		backdrop.addEventListener("click", (event) => {
+			if (event.target === backdrop) closeConfirmDialog();
+		});
+		document.body.appendChild(backdrop);
+		confirmButton.focus();
+	}
+	function showToast(message) {
+		const root = ensureToastRoot();
+		const toast = document.createElement("div");
+		toast.className = "tm-address-toast";
+		toast.textContent = message;
+		root.appendChild(toast);
+		window.setTimeout(() => {
+			toast.classList.add("is-leaving");
+			window.setTimeout(() => toast.remove(), 160);
+		}, 2e3);
+	}
+	function closeConfirmDialog() {
+		document.getElementById(CONFIRM_ID)?.remove();
+	}
+	function ensureToastRoot() {
+		const existingRoot = document.getElementById(TOAST_ROOT_ID);
+		if (existingRoot) return existingRoot;
+		const root = document.createElement("div");
+		root.id = TOAST_ROOT_ID;
+		root.className = "tm-address-toast-root";
+		document.body.appendChild(root);
+		return root;
+	}
 	var statusText = "";
 	function mountStatusWidget(options) {
 		if (document.getElementById("tm-address-override-status")) return;
-		const button = document.createElement("button");
-		button.id = STATUS_WIDGET_ID;
-		button.className = CLASS_NAMES.statusWidget;
-		button.type = "button";
-		button.innerHTML = `
-    <span class="tm-address-override-status__action">修改</span>
-    <span class="tm-address-override-status__version">v26.65.2346</span>
+		const widget = document.createElement("div");
+		widget.id = STATUS_WIDGET_ID;
+		widget.className = CLASS_NAMES.statusWidget;
+		widget.innerHTML = `
+    <div class="tm-address-override-status__actions">
+      <button type="button" class="tm-address-override-status__button tm-address-override-status__button--edit">
+        修改
+      </button>
+      <button type="button" class="tm-address-override-status__button tm-address-override-status__button--reset">
+        重置
+      </button>
+      <button type="button" class="tm-address-override-status__button tm-address-override-status__button--hide">
+        隐藏
+      </button>
+    </div>
+    <div class="tm-address-override-status__version">v26.66.2209</div>
   `;
-		button.addEventListener("click", (event) => {
+		widget.querySelector(".tm-address-override-status__button--edit")?.addEventListener("click", (event) => {
 			event.preventDefault();
 			event.stopPropagation();
 			options.onToggleEditMode();
 		});
-		document.body.appendChild(button);
+		widget.querySelector(".tm-address-override-status__button--reset")?.addEventListener("click", (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			openConfirmDialog({
+				title: "重置本地修改",
+				message: "确认清空已保存的名称和地址修改，并恢复当前列表吗？",
+				confirmText: "重置",
+				danger: true,
+				onConfirm: () => {
+					options.onReset();
+					showToast("已重置本地修改");
+				}
+			});
+		});
+		widget.querySelector(".tm-address-override-status__button--hide")?.addEventListener("click", (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+			openConfirmDialog({
+				title: "隐藏操作按钮",
+				message: "确认隐藏右下角操作按钮吗？隐藏后可以在控制台输入 show() 重新显示。",
+				confirmText: "隐藏",
+				onConfirm: () => {
+					options.onHide();
+					hideStatusWidget();
+					showToast("操作按钮已隐藏，可输入 show() 恢复");
+				}
+			});
+		});
+		widget.addEventListener("click", (event) => {
+			event.preventDefault();
+			event.stopPropagation();
+		});
+		document.body.appendChild(widget);
+		installShowMethod();
 	}
 	function updateStatusWidget(state) {
-		const button = document.getElementById(STATUS_WIDGET_ID);
-		if (!button) return;
+		const widget = document.getElementById(STATUS_WIDGET_ID);
+		if (!widget) return;
 		const nextText = state.isEditMode ? "完成" : "修改";
 		if (statusText !== nextText) {
-			const action = button.querySelector(".tm-address-override-status__action");
+			const action = widget.querySelector(".tm-address-override-status__button--edit");
 			if (action) action.textContent = nextText;
 			statusText = nextText;
 		}
-		button.title = state.isEditMode ? `完成修改，已识别 ${state.processedCount} 条` : `进入修改模式，已识别 ${state.processedCount} 条`;
-		button.classList.toggle("is-empty", state.processedCount === 0);
-		button.classList.toggle("is-editing", state.isEditMode);
+		widget.title = state.isEditMode ? `完成修改，已识别 ${state.processedCount} 条` : `进入修改模式，已识别 ${state.processedCount} 条`;
+		widget.classList.toggle("is-empty", state.processedCount === 0);
+		widget.classList.toggle("is-editing", state.isEditMode);
+	}
+	function hideStatusWidget() {
+		const widget = document.getElementById(STATUS_WIDGET_ID);
+		if (widget) {
+			widget.hidden = true;
+			widget.style.display = "none";
+		}
+	}
+	function showStatusWidget() {
+		const widget = document.getElementById(STATUS_WIDGET_ID);
+		if (widget) {
+			widget.hidden = false;
+			widget.style.display = "";
+			showToast("操作按钮已显示");
+		}
+	}
+	function installShowMethod() {
+		window.show = showStatusWidget;
+		const script = document.createElement("script");
+		script.textContent = `
+    window.show = function () {
+      var widget = document.getElementById(${JSON.stringify(STATUS_WIDGET_ID)});
+      if (widget) {
+        widget.hidden = false;
+        widget.style.display = "";
+      }
+    };
+  `;
+		document.documentElement.appendChild(script);
+		script.remove();
 	}
 	var isEditMode = false;
 	function startBaiduAddressOverrides() {
@@ -728,7 +1022,11 @@
 			return;
 		}
 		installAddressOverrideStyles();
-		mountStatusWidget({ onToggleEditMode: toggleEditMode });
+		mountStatusWidget({
+			onToggleEditMode: toggleEditMode,
+			onReset: resetOverrides,
+			onHide: exitEditMode
+		});
 		refreshPoiList();
 		observePoiList();
 		bootstrapPollPoiList();
@@ -744,6 +1042,22 @@
 		isEditMode = !isEditMode;
 		refreshPoiList();
 	}
+	function exitEditMode() {
+		isEditMode = false;
+		refreshPoiList();
+	}
+	function resetOverrides() {
+		clearAddressOverrides();
+		isEditMode = false;
+		for (const item of queryPoiItems()) {
+			const context = getPoiContext(item);
+			if (!context) continue;
+			renderOriginalTitle(context.titleEl, context.originalTitle);
+			renderOriginalAddress(context.addressEl, context.originalAddress);
+			removeEditButton(item);
+		}
+		refreshPoiList();
+	}
 	function processPoiList() {
 		const store = loadOverrideStore();
 		let processedCount = 0;
@@ -752,13 +1066,12 @@
 			if (!context) continue;
 			const record = store[context.key];
 			const recordTitle = record?.title ?? "";
-			if (record?.address && record.address !== context.originalAddress) renderOverriddenAddress(context.addressEl, record.address);
-			else if (context.addressEl.classList.contains("tm-addr-overridden")) renderOriginalAddress(context.addressEl, context.originalAddress);
+			if (record?.address && record.address !== context.originalAddress) renderOverriddenAddress(context.item, context.addressEl, record.address);
+			else if (context.addressEl?.classList.contains("tm-addr-overridden")) renderOriginalAddress(context.addressEl, context.originalAddress);
 			if (recordTitle && recordTitle !== context.originalTitle) renderOverriddenTitle(context.titleEl, recordTitle);
 			else if (context.titleEl?.classList.contains("tm-title-overridden")) renderOriginalTitle(context.titleEl, context.originalTitle);
-			setPoiItemEditMode(item, isEditMode);
 			if (isEditMode) {
-				if (!hasEditButton(item)) appendEditButton(context.addressEl, (event) => {
+				if (!hasEditButton(item)) appendEditButton(item, context.addressEl, context.titleEl, (event) => {
 					handleEditButtonClick(event, item);
 				});
 			} else removeEditButton(item);
@@ -799,7 +1112,7 @@
 				saveAddressOverride(context.key, record);
 				if (values.title !== context.originalTitle) renderOverriddenTitle(context.titleEl, values.title);
 				else renderOriginalTitle(context.titleEl, context.originalTitle);
-				if (values.address !== context.originalAddress) renderOverriddenAddress(context.addressEl, values.address);
+				if (values.address !== context.originalAddress) renderOverriddenAddress(context.item, context.addressEl, values.address);
 				else renderOriginalAddress(context.addressEl, context.originalAddress);
 			}
 		});

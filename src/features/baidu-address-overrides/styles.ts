@@ -7,7 +7,7 @@ export function installAddressOverrideStyles(): void {
     return;
   }
 
-  GM_addStyle(`
+  injectStyle(`
     .tm-edit-addr-btn {
       position: relative;
       z-index: 1;
@@ -44,41 +44,6 @@ export function installAddressOverrideStyles(): void {
       outline-offset: 2px;
     }
 
-    .tm-addr-overridden,
-    .tm-title-overridden {
-      color: #cf222e !important;
-      font-weight: 500;
-    }
-
-    .tm-poi-editable {
-      cursor: pointer !important;
-      outline: 1px solid transparent;
-      outline-offset: -1px;
-      transition:
-        background 120ms ease,
-        outline-color 120ms ease;
-    }
-
-    .tm-poi-editable:hover {
-      background: #f6f8fa !important;
-      outline-color: #0969da;
-    }
-
-    .tm-addr-tag {
-      display: inline-flex;
-      align-items: center;
-      height: 20px;
-      margin-left: 6px;
-      padding: 0 7px;
-      border: 1px solid #d0d7de;
-      border-radius: 999px;
-      background: #f6f8fa;
-      color: #57606a;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-size: 12px;
-      line-height: 18px;
-    }
-
     .tm-address-override-status {
       position: fixed;
       right: 16px;
@@ -86,7 +51,7 @@ export function installAddressOverrideStyles(): void {
       z-index: 2147483646;
       display: inline-flex;
       flex-direction: column;
-      align-items: center;
+      align-items: flex-end;
       gap: 3px;
       min-width: 64px;
       padding: 7px 10px;
@@ -100,21 +65,48 @@ export function installAddressOverrideStyles(): void {
       font-size: 12px;
       font-weight: 500;
       line-height: 1.1;
+      text-align: right;
     }
 
-    .tm-address-override-status__action {
-      display: block;
+    .tm-address-override-status__actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+    }
+
+    .tm-address-override-status__button {
+      height: 28px;
+      padding: 0 10px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #f6f8fa;
+      color: #24292f;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       font-size: 12px;
       font-weight: 600;
-      line-height: 14px;
+      line-height: 20px;
+    }
+
+    .tm-address-override-status__button:hover {
+      background: #f3f4f6;
+      border-color: #afb8c1;
+    }
+
+    .tm-address-override-status__button--reset {
+      color: #cf222e;
     }
 
     .tm-address-override-status__version {
       display: block;
+      width: 100%;
       color: #57606a;
+      opacity: 0.66;
       font-size: 10px;
       font-weight: 500;
       line-height: 12px;
+      text-align: right;
     }
 
     .tm-address-override-status:hover {
@@ -127,16 +119,23 @@ export function installAddressOverrideStyles(): void {
     }
 
     .tm-address-override-status.is-editing {
+      border-color: #d0d7de;
+      background: #f6f8fa;
+      color: #24292f;
+    }
+
+    .tm-address-override-status.is-editing .tm-address-override-status__button--edit {
       border-color: rgba(27, 31, 36, 0.15);
       background: #2da44e;
       color: #ffffff;
     }
 
     .tm-address-override-status.is-editing .tm-address-override-status__version {
-      color: rgba(255, 255, 255, 0.82);
+      color: #57606a;
+      opacity: 0.66;
     }
 
-    .tm-address-override-status.is-editing:hover {
+    .tm-address-override-status.is-editing .tm-address-override-status__button--edit:hover {
       background: #2c974b;
       border-color: rgba(27, 31, 36, 0.15);
     }
@@ -318,7 +317,136 @@ export function installAddressOverrideStyles(): void {
       border-color: rgba(207, 34, 46, 0.4);
       background: #ffebe9;
     }
+
+    .tm-address-confirm-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 2147483647;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      background: rgba(31, 35, 40, 0.35);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .tm-address-confirm {
+      width: min(360px, 100%);
+      padding: 16px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #ffffff;
+      box-shadow: 0 16px 32px rgba(31, 35, 40, 0.16);
+      color: #24292f;
+    }
+
+    .tm-address-confirm__title {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 20px;
+    }
+
+    .tm-address-confirm__message {
+      margin: 0;
+      color: #57606a;
+      font-size: 13px;
+      line-height: 20px;
+    }
+
+    .tm-address-confirm__footer {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    .tm-address-confirm__button {
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #f6f8fa;
+      color: #24292f;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 12px;
+      font-weight: 500;
+      line-height: 20px;
+    }
+
+    .tm-address-confirm__button:hover {
+      background: #f3f4f6;
+      border-color: #afb8c1;
+    }
+
+    .tm-address-confirm__button--primary {
+      border-color: rgba(27, 31, 36, 0.15);
+      background: #2da44e;
+      color: #ffffff;
+    }
+
+    .tm-address-confirm__button--primary:hover {
+      background: #2c974b;
+      border-color: rgba(27, 31, 36, 0.15);
+    }
+
+    .tm-address-confirm__button--danger {
+      border-color: rgba(27, 31, 36, 0.15);
+      background: #cf222e;
+      color: #ffffff;
+    }
+
+    .tm-address-confirm__button--danger:hover {
+      background: #a40e26;
+      border-color: rgba(27, 31, 36, 0.15);
+    }
+
+    .tm-address-toast-root {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 2147483647;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .tm-address-toast {
+      max-width: 320px;
+      padding: 10px 12px;
+      border: 1px solid #d0d7de;
+      border-radius: 6px;
+      background: #24292f;
+      box-shadow: 0 8px 24px rgba(140, 149, 159, 0.24);
+      color: #ffffff;
+      font-size: 13px;
+      line-height: 18px;
+      opacity: 1;
+      transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+    }
+
+    .tm-address-toast.is-leaving {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
   `);
 
   installed = true;
+}
+
+function injectStyle(css: string): void {
+  if (typeof GM_addStyle === "function") {
+    GM_addStyle(css);
+    return;
+  }
+
+  const style = document.createElement("style");
+  style.textContent = css;
+  document.head.appendChild(style);
 }

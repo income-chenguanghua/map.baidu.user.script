@@ -3,6 +3,7 @@ import { startBaiduAddressOverrides } from "./features/baidu-address-overrides";
 declare global {
   interface Window {
     __bdmapAddressOverridesReady__?: boolean;
+    show?: () => void;
   }
 }
 

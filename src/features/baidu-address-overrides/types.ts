@@ -12,7 +12,7 @@ export type AddressOverrideStore = Record<string, AddressOverrideRecord>;
 export interface PoiContext {
   item: HTMLElement;
   titleEl: HTMLElement | null;
-  addressEl: HTMLElement;
+  addressEl: HTMLElement | null;
   key: string;
   uid: string | null;
   currentTitle: string;

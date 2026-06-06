@@ -14,11 +14,11 @@ import {
   renderOriginalTitle,
   renderOverriddenAddress,
   renderOverriddenTitle,
-  setPoiItemEditMode,
 } from "./dom";
 import { openAddressEditor } from "./editor-dialog";
 import { installAddressOverrideStyles } from "./styles";
 import {
+  clearAddressOverrides,
   loadOverrideStore,
   removeAddressOverride,
   saveAddressOverride,
@@ -42,6 +42,8 @@ export function startBaiduAddressOverrides(): void {
   installAddressOverrideStyles();
   mountStatusWidget({
     onToggleEditMode: toggleEditMode,
+    onReset: resetOverrides,
+    onHide: exitEditMode,
   });
   refreshPoiList();
   observePoiList();
@@ -61,6 +63,29 @@ function toggleEditMode(): void {
   refreshPoiList();
 }
 
+function exitEditMode(): void {
+  isEditMode = false;
+  refreshPoiList();
+}
+
+function resetOverrides(): void {
+  clearAddressOverrides();
+  isEditMode = false;
+
+  for (const item of queryPoiItems()) {
+    const context = getPoiContext(item);
+    if (!context) {
+      continue;
+    }
+
+    renderOriginalTitle(context.titleEl, context.originalTitle);
+    renderOriginalAddress(context.addressEl, context.originalAddress);
+    removeEditButton(item);
+  }
+
+  refreshPoiList();
+}
+
 function processPoiList(): number {
   const store = loadOverrideStore();
   let processedCount = 0;
@@ -74,8 +99,8 @@ function processPoiList(): number {
     const record = store[context.key];
     const recordTitle = record?.title ?? "";
     if (record?.address && record.address !== context.originalAddress) {
-      renderOverriddenAddress(context.addressEl, record.address);
-    } else if (context.addressEl.classList.contains("tm-addr-overridden")) {
+      renderOverriddenAddress(context.item, context.addressEl, record.address);
+    } else if (context.addressEl?.classList.contains("tm-addr-overridden")) {
       renderOriginalAddress(context.addressEl, context.originalAddress);
     }
 
@@ -85,10 +110,9 @@ function processPoiList(): number {
       renderOriginalTitle(context.titleEl, context.originalTitle);
     }
 
-    setPoiItemEditMode(item, isEditMode);
     if (isEditMode) {
       if (!hasEditButton(item)) {
-        appendEditButton(context.addressEl, (event) => {
+        appendEditButton(item, context.addressEl, context.titleEl, (event) => {
           handleEditButtonClick(event, item);
         });
       }
@@ -154,7 +178,7 @@ function handleEditButtonClick(event: MouseEvent, item: HTMLElement): void {
       }
 
       if (values.address !== context.originalAddress) {
-        renderOverriddenAddress(context.addressEl, values.address);
+        renderOverriddenAddress(context.item, context.addressEl, values.address);
       } else {
         renderOriginalAddress(context.addressEl, context.originalAddress);
       }

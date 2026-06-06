@@ -48,7 +48,6 @@ export const CLASS_NAMES = {
   editButton: "tm-edit-addr-btn",
   overriddenAddress: "tm-addr-overridden",
   overriddenTitle: "tm-title-overridden",
-  editableItem: "tm-poi-editable",
   overrideTag: "tm-addr-tag",
   statusWidget: "tm-address-override-status",
   dialogButton: "tm-address-dialog__button",

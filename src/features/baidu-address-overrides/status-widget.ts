@@ -1,9 +1,12 @@
 import { CLASS_NAMES, STATUS_WIDGET_ID } from "./constants";
+import { openConfirmDialog, showToast } from "./feedback";
 
 let statusText = "";
 
 interface StatusWidgetOptions {
   onToggleEditMode: () => void;
+  onReset: () => void;
+  onHide: () => void;
 }
 
 interface StatusWidgetState {
@@ -16,33 +19,85 @@ export function mountStatusWidget(options: StatusWidgetOptions): void {
     return;
   }
 
-  const button = document.createElement("button");
-  button.id = STATUS_WIDGET_ID;
-  button.className = CLASS_NAMES.statusWidget;
-  button.type = "button";
-  button.innerHTML = `
-    <span class="tm-address-override-status__action">修改</span>
-    <span class="tm-address-override-status__version">v${__APP_VERSION__}</span>
+  const widget = document.createElement("div");
+  widget.id = STATUS_WIDGET_ID;
+  widget.className = CLASS_NAMES.statusWidget;
+  widget.innerHTML = `
+    <div class="tm-address-override-status__actions">
+      <button type="button" class="tm-address-override-status__button tm-address-override-status__button--edit">
+        修改
+      </button>
+      <button type="button" class="tm-address-override-status__button tm-address-override-status__button--reset">
+        重置
+      </button>
+      <button type="button" class="tm-address-override-status__button tm-address-override-status__button--hide">
+        隐藏
+      </button>
+    </div>
+    <div class="tm-address-override-status__version">v${__APP_VERSION__}</div>
   `;
-  button.addEventListener("click", (event) => {
+
+  widget
+    .querySelector(".tm-address-override-status__button--edit")
+    ?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      options.onToggleEditMode();
+    });
+
+  widget
+    .querySelector(".tm-address-override-status__button--reset")
+    ?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openConfirmDialog({
+        title: "重置本地修改",
+        message: "确认清空已保存的名称和地址修改，并恢复当前列表吗？",
+        confirmText: "重置",
+        danger: true,
+        onConfirm: () => {
+          options.onReset();
+          showToast("已重置本地修改");
+        },
+      });
+    });
+
+  widget
+    .querySelector(".tm-address-override-status__button--hide")
+    ?.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openConfirmDialog({
+        title: "隐藏操作按钮",
+        message: "确认隐藏右下角操作按钮吗？隐藏后可以在控制台输入 show() 重新显示。",
+        confirmText: "隐藏",
+        onConfirm: () => {
+          options.onHide();
+          hideStatusWidget();
+          showToast("操作按钮已隐藏，可输入 show() 恢复");
+        },
+      });
+    });
+
+  widget.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    options.onToggleEditMode();
   });
 
-  document.body.appendChild(button);
+  document.body.appendChild(widget);
+  installShowMethod();
 }
 
 export function updateStatusWidget(state: StatusWidgetState): void {
-  const button = document.getElementById(STATUS_WIDGET_ID);
-  if (!button) {
+  const widget = document.getElementById(STATUS_WIDGET_ID);
+  if (!widget) {
     return;
   }
 
   const nextText = state.isEditMode ? "完成" : "修改";
   if (statusText !== nextText) {
-    const action = button.querySelector<HTMLElement>(
-      ".tm-address-override-status__action"
+    const action = widget.querySelector<HTMLElement>(
+      ".tm-address-override-status__button--edit"
     );
     if (action) {
       action.textContent = nextText;
@@ -50,9 +105,43 @@ export function updateStatusWidget(state: StatusWidgetState): void {
     statusText = nextText;
   }
 
-  button.title = state.isEditMode
+  widget.title = state.isEditMode
     ? `完成修改，已识别 ${state.processedCount} 条`
     : `进入修改模式，已识别 ${state.processedCount} 条`;
-  button.classList.toggle("is-empty", state.processedCount === 0);
-  button.classList.toggle("is-editing", state.isEditMode);
+  widget.classList.toggle("is-empty", state.processedCount === 0);
+  widget.classList.toggle("is-editing", state.isEditMode);
+}
+
+function hideStatusWidget(): void {
+  const widget = document.getElementById(STATUS_WIDGET_ID);
+  if (widget) {
+    widget.hidden = true;
+    widget.style.display = "none";
+  }
+}
+
+function showStatusWidget(): void {
+  const widget = document.getElementById(STATUS_WIDGET_ID);
+  if (widget) {
+    widget.hidden = false;
+    widget.style.display = "";
+    showToast("操作按钮已显示");
+  }
+}
+
+function installShowMethod(): void {
+  window.show = showStatusWidget;
+
+  const script = document.createElement("script");
+  script.textContent = `
+    window.show = function () {
+      var widget = document.getElementById(${JSON.stringify(STATUS_WIDGET_ID)});
+      if (widget) {
+        widget.hidden = false;
+        widget.style.display = "";
+      }
+    };
+  `;
+  document.documentElement.appendChild(script);
+  script.remove();
 }

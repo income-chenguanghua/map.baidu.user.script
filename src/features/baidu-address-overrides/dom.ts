@@ -87,9 +87,8 @@ function readTitleText(titleEl: HTMLElement): string {
 }
 
 function rememberOriginalAddress(addressEl: HTMLElement): string {
-  const existing = addressEl.dataset[ORIGINAL_ADDRESS_DATA_KEY];
-  if (existing) {
-    return existing;
+  if (ORIGINAL_ADDRESS_DATA_KEY in addressEl.dataset) {
+    return addressEl.dataset[ORIGINAL_ADDRESS_DATA_KEY] ?? "";
   }
 
   const originalAddress = readAddressText(addressEl);
@@ -102,9 +101,8 @@ function rememberOriginalTitle(titleEl: HTMLElement | null): string {
     return "";
   }
 
-  const existing = titleEl.dataset[ORIGINAL_TITLE_DATA_KEY];
-  if (existing) {
-    return existing;
+  if (ORIGINAL_TITLE_DATA_KEY in titleEl.dataset) {
+    return titleEl.dataset[ORIGINAL_TITLE_DATA_KEY] ?? "";
   }
 
   const originalTitle = readTitleText(titleEl);
@@ -132,12 +130,12 @@ function buildStableKey(
 export function getPoiContext(item: HTMLElement): PoiContext | null {
   const titleEl = getTitleElement(item);
   const addressEl = getAddressElement(item);
-  if (!addressEl) {
+  if (!titleEl && !addressEl) {
     return null;
   }
 
   const originalTitle = rememberOriginalTitle(titleEl);
-  const originalAddress = rememberOriginalAddress(addressEl);
+  const originalAddress = addressEl ? rememberOriginalAddress(addressEl) : "";
   const key = buildStableKey(item, originalTitle, originalAddress);
   if (!key) {
     return null;
@@ -159,8 +157,8 @@ export function getCurrentTitle(titleEl: HTMLElement | null): string {
   return titleEl ? readTitleText(titleEl) : "";
 }
 
-export function getCurrentAddress(addressEl: HTMLElement): string {
-  return addressEl.textContent.trim();
+export function getCurrentAddress(addressEl: HTMLElement | null): string {
+  return addressEl ? readAddressText(addressEl) : "";
 }
 
 export function renderOverriddenTitle(
@@ -173,7 +171,7 @@ export function renderOverriddenTitle(
 
   titleEl.textContent = title;
   titleEl.setAttribute("title", title);
-  titleEl.classList.add(CLASS_NAMES.overriddenTitle);
+  titleEl.classList.remove(CLASS_NAMES.overriddenTitle);
 }
 
 export function renderOriginalTitle(
@@ -190,27 +188,38 @@ export function renderOriginalTitle(
 }
 
 export function renderOverriddenAddress(
-  addressEl: HTMLElement,
+  item: HTMLElement,
+  addressEl: HTMLElement | null,
   address: string
 ): void {
-  addressEl.textContent = address;
-  addressEl.setAttribute("title", address);
-  addressEl.classList.add(CLASS_NAMES.overriddenAddress);
-  ensureOverrideTag(addressEl);
+  const nextAddressEl = ensureAddressElement(item, addressEl);
+  if (!nextAddressEl) {
+    return;
+  }
+
+  nextAddressEl.textContent = address;
+  nextAddressEl.setAttribute("title", address);
+  nextAddressEl.classList.remove(CLASS_NAMES.overriddenAddress);
+  removeOverrideTag(nextAddressEl);
 }
 
 export function renderOriginalAddress(
-  addressEl: HTMLElement,
+  addressEl: HTMLElement | null,
   originalAddress: string
 ): void {
+  if (!addressEl) {
+    return;
+  }
+
+  if (!originalAddress && isScriptCreatedAddressRow(addressEl)) {
+    addressEl.closest(".row.addr")?.remove();
+    return;
+  }
+
   addressEl.textContent = originalAddress;
   addressEl.setAttribute("title", originalAddress);
   addressEl.classList.remove(CLASS_NAMES.overriddenAddress);
   removeOverrideTag(addressEl);
-}
-
-export function setPoiItemEditMode(item: HTMLElement, enabled: boolean): void {
-  item.classList.toggle(CLASS_NAMES.editableItem, enabled);
 }
 
 export function hasEditButton(item: Element): boolean {
@@ -218,10 +227,12 @@ export function hasEditButton(item: Element): boolean {
 }
 
 export function appendEditButton(
-  addressEl: HTMLElement,
+  item: HTMLElement,
+  addressEl: HTMLElement | null,
+  titleEl: HTMLElement | null,
   onClick: (event: MouseEvent) => void
 ): void {
-  const parent = addressEl.parentElement;
+  const parent = addressEl?.parentElement || titleEl?.parentElement || item;
   if (!parent) {
     return;
   }
@@ -250,22 +261,52 @@ export function removeEditButton(item: Element): void {
   item.querySelector(`.${CLASS_NAMES.editButton}`)?.remove();
 }
 
-function ensureOverrideTag(addressEl: HTMLElement): void {
-  const parent = addressEl.parentElement;
-  if (!parent || parent.querySelector(`.${CLASS_NAMES.overrideTag}`)) {
-    return;
-  }
-
-  const tag = document.createElement("span");
-  tag.className = CLASS_NAMES.overrideTag;
-  tag.textContent = "已本地修改";
-  parent.appendChild(tag);
-}
-
 function removeOverrideTag(addressEl: HTMLElement): void {
   addressEl.parentElement
     ?.querySelector(`.${CLASS_NAMES.overrideTag}`)
     ?.remove();
+}
+
+function ensureAddressElement(
+  item: HTMLElement,
+  addressEl: HTMLElement | null
+): HTMLElement | null {
+  if (addressEl) {
+    return addressEl;
+  }
+
+  const titleEl = getTitleElement(item);
+  const titleRow = titleEl?.closest(".row");
+  const container =
+    titleRow?.parentElement ||
+    item.querySelector<HTMLElement>(".ml_30") ||
+    item.querySelector<HTMLElement>(".mr_90");
+
+  if (!container) {
+    return null;
+  }
+
+  const row = document.createElement("div");
+  row.className = "row addr";
+  row.dataset.tmCreatedAddressRow = "true";
+
+  const span = document.createElement("span");
+  span.className = "n-grey";
+  span.dataset[ORIGINAL_ADDRESS_DATA_KEY] = "";
+  row.appendChild(span);
+
+  if (titleRow?.parentElement === container) {
+    titleRow.insertAdjacentElement("afterend", row);
+  } else {
+    container.appendChild(row);
+  }
+
+  return span;
+}
+
+function isScriptCreatedAddressRow(addressEl: HTMLElement): boolean {
+  return addressEl.closest<HTMLElement>(".row.addr")?.dataset
+    .tmCreatedAddressRow === "true";
 }
 
 function queryFirst<T extends Element>(
@@ -283,7 +324,9 @@ function queryFirst<T extends Element>(
 }
 
 function looksLikePoiItem(item: HTMLElement): boolean {
-  return Boolean(getUidFromItem(item) || getAddressElement(item));
+  return Boolean(
+    getUidFromItem(item) || getTitleElement(item) || getAddressElement(item)
+  );
 }
 
 function findPoiContainerFromUidLink(link: HTMLElement): HTMLElement | null {
