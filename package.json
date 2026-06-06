@@ -1,0 +1,27 @@
+{
+  "name": "map.baidu.user.script",
+  "private": true,
+  "version": "26.65.2346",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@types/tampermonkey": "^5.0.5",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.11",
+    "vite-plugin-monkey": "^8.0.0"
+  },
+  "description": "Userscript starter powered by Vite, vite-plugin-monkey, and TypeScript",
+  "keywords": [
+    "userscript",
+    "tampermonkey",
+    "vanilla",
+    "vite",
+    "vite-plugin-monkey",
+    "typescript"
+  ]
+}
