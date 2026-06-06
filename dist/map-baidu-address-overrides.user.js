@@ -4,6 +4,8 @@
 // @version      26.66.2210
 // @author       chengguanghua
 // @description  本地覆盖百度地图搜索结果左侧地址，刷新后继续按 POI uid 生效。
+// @downloadURL  https://github.com/income-chenguanghua/map.baidu.user.script/raw/refs/heads/main/dist/map-baidu-address-overrides.user.js
+// @updateURL    https://github.com/income-chenguanghua/map.baidu.user.script/raw/refs/heads/main/dist/map-baidu-address-overrides.user.js
 // @match        https://map.baidu.com/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
@@ -971,6 +973,7 @@
 		});
 		document.body.appendChild(widget);
 		installShowMethod();
+		printShowMethodHint();
 	}
 	function updateStatusWidget(state) {
 		const widget = document.getElementById(STATUS_WIDGET_ID);
@@ -1014,6 +1017,9 @@
   `;
 		document.documentElement.appendChild(script);
 		script.remove();
+	}
+	function printShowMethodHint() {
+		console.info("[百度地图地址修改] 右下角操作按钮已加载；如果隐藏了按钮，可在控制台输入 show() 重新显示。");
 	}
 	var isEditMode = false;
 	function startBaiduAddressOverrides() {

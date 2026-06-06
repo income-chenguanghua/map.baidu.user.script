@@ -86,6 +86,7 @@ export function mountStatusWidget(options: StatusWidgetOptions): void {
 
   document.body.appendChild(widget);
   installShowMethod();
+  printShowMethodHint();
 }
 
 export function updateStatusWidget(state: StatusWidgetState): void {
@@ -144,4 +145,10 @@ function installShowMethod(): void {
   `;
   document.documentElement.appendChild(script);
   script.remove();
+}
+
+function printShowMethodHint(): void {
+  console.info(
+    "[百度地图地址修改] 右下角操作按钮已加载；如果隐藏了按钮，可在控制台输入 show() 重新显示。"
+  );
 }

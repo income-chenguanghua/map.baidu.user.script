@@ -2,6 +2,9 @@ import { defineConfig } from "vite";
 import monkey from "vite-plugin-monkey";
 import packageJson from "./package.json";
 
+const userscriptUrl =
+  "https://github.com/income-chenguanghua/map.baidu.user.script/raw/refs/heads/main/dist/map-baidu-address-overrides.user.js";
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
@@ -18,6 +21,8 @@ export default defineConfig({
         author: "chengguanghua",
         match: ["https://map.baidu.com/*"],
         grant: ["GM_getValue", "GM_setValue", "GM_addStyle"],
+        updateURL: userscriptUrl,
+        downloadURL: userscriptUrl,
         "run-at": "document-idle",
       },
       build: {
